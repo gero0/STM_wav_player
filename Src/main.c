@@ -20,11 +20,18 @@
 #include "main.h"
 #include "dac.h"
 #include "dma.h"
+#include "fatfs.h"
+#include "spi.h"
 #include "tim.h"
+#include "usart.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <stdarg.h>
+#include <stdio.h>
+#include <string.h>
+
 #include <audio_player.h>
 #include <sound.h>
 
@@ -53,6 +60,10 @@
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
+
+FATFS FatFs; //Fatfs handle
+FIL fil; //File handle
+FRESULT fres; //Result after operations
 
 /* USER CODE END PFP */
 
@@ -96,11 +107,66 @@ int main(void)
   MX_TIM6_Init();
   MX_DMA_Init();
   MX_DAC1_Init();
+  MX_SPI1_Init();
+  MX_USART3_UART_Init();
+  MX_FATFS_Init();
   /* USER CODE BEGIN 2 */
     // HAL_DAC_Start_DMA(&hdac1, DAC_CHANNEL_1, (uint32_t*)sound, sound_len, DAC_ALIGN_8B_R);
     // HAL_DAC_Start(&hdac1, DAC_CHANNEL_1);
     HAL_TIM_Base_Start(&htim6);
     play(sound, sound_len, &hdac1);
+
+    HAL_Delay(5000);
+
+    fres = f_mount(&FatFs, "", 1); //1=mount now
+    if (fres != FR_OK) {
+        //myprintf("f_mount error (%i)\r\n", fres);
+        HAL_UART_Transmit(&huart3, "FAILED", 6, 1);
+        while(1){}
+    }
+
+    //Let's get some statistics from the SD card
+    DWORD free_clusters, free_sectors, total_sectors;
+
+    FATFS* getFreeFs;
+
+    fres = f_getfree("", &free_clusters, &getFreeFs);
+    if (fres != FR_OK) {
+       // myprintf("f_getfree error (%i)\r\n", fres);
+        while (1)
+            ;
+    }
+
+    //Formula comes from ChaN's documentation
+    total_sectors = (getFreeFs->n_fatent - 2) * getFreeFs->csize;
+    free_sectors = free_clusters * getFreeFs->csize;
+
+    //myprintf("SD card stats:\r\n%10lu KiB total drive space.\r\n%10lu KiB available.\r\n", total_sectors / 2, free_sectors / 2);
+
+    //Now let's try to open file "test.txt"
+    fres = f_open(&fil, "test.txt", FA_READ);
+    if (fres != FR_OK) {
+        //myprintf("f_open error (%i)\r\n");
+        while (1)
+            ;
+    }
+    //myprintf("I was able to open 'test.txt' for reading!\r\n");
+
+    //Read 30 bytes from "test.txt" on the SD card
+    BYTE readBuf[30];
+
+    //We can either use f_read OR f_gets to get data out of files
+    //f_gets is a wrapper on f_read that does some string formatting for us
+    TCHAR* rres = f_gets((TCHAR*)readBuf, 30, &fil);
+    if (rres != 0) {
+        //myprintf("Read string from 'test.txt' contents: %s\r\n", readBuf);
+    } else {
+        //myprintf("f_gets error (%i)\r\n", fres);
+    }
+
+    //Be a tidy kiwi - don't forget to close your file!
+    f_close(&fil);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -141,7 +207,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLM = 4;
   RCC_OscInitStruct.PLL.PLLN = 60;
   RCC_OscInitStruct.PLL.PLLP = 2;
-  RCC_OscInitStruct.PLL.PLLQ = 2;
+  RCC_OscInitStruct.PLL.PLLQ = 16;
   RCC_OscInitStruct.PLL.PLLR = 2;
   RCC_OscInitStruct.PLL.PLLRGE = RCC_PLL1VCIRANGE_3;
   RCC_OscInitStruct.PLL.PLLVCOSEL = RCC_PLL1VCOWIDE;
