@@ -3,13 +3,23 @@
 #include <stdint.h>
 
 #define DMA_MAX_TRANSFER 65535
+#define BUFFER_SIZE 1024
 
-static uint32_t audio_len;
-static uint32_t audio_pos = 0;
-static uint8_t* audio_buffer;
+static uint32_t (*data_source)(uint8_t*, uint32_t) = NULL;
+static uint32_t data_len;
+static uint32_t data_pos = 0;
+static uint32_t playing_pos = 0;
+static uint32_t bytes_to_transfer = 0;
+
+volatile static uint8_t buf1[BUFFER_SIZE];
+volatile static uint8_t buf2[BUFFER_SIZE];
+
+volatile static uint8_t* playing_buffer = buf1;
+volatile static uint8_t* reading_buffer = buf2;
+
+static enum PlayerStates player_state = STOPPED;
+
 static DAC_HandleTypeDef* hdac;
-
-static enum PlayerStates audio_state = STOPPED;
 
 uint32_t min(uint32_t a, uint32_t b)
 {
@@ -19,33 +29,66 @@ uint32_t min(uint32_t a, uint32_t b)
     return b;
 }
 
-void play(uint8_t* buffer, uint32_t len, DAC_HandleTypeDef* dac_handle)
+uint32_t fetch_data(uint8_t* buffer)
 {
-    audio_buffer = buffer;
-    audio_len = len;
-    audio_pos = 0;
-    audio_state = PLAYING;
-    hdac = dac_handle;
-
-    uint32_t transfer_size = min(audio_len, DMA_MAX_TRANSFER);
-
-    HAL_DAC_Start_DMA(hdac, DAC_CHANNEL_1, (uint32_t*)audio_buffer, transfer_size, DAC_ALIGN_8B_R);
-    audio_pos += transfer_size;
+    uint32_t bytes_read = data_source(buffer, BUFFER_SIZE);
+    data_pos += bytes_read;
+    return bytes_read;
 }
 
-void dac_dma_callback()
+void player_init(uint32_t (*source)(uint8_t*, uint32_t), uint32_t len, DAC_HandleTypeDef* dac_handle)
 {
-    if (audio_state == STOPPED) {
+    data_source = source;
+    data_len = len;
+    data_pos = 0;
+    playing_pos = 0;
+    bytes_to_transfer = 0;
+    hdac = dac_handle;
+
+    //The order here is important!
+    fetch_data(playing_buffer);
+    fetch_data(reading_buffer);
+
+    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_0);
+
+    player_state = READY;
+}
+
+void player_play()
+{
+    if (player_state != READY) {
+        return; //TODO: return some kind of error
+    }
+
+    uint32_t transfer_size = min(data_pos, BUFFER_SIZE);
+
+    HAL_DAC_Start_DMA(hdac, DAC_CHANNEL_1, (uint32_t*)playing_buffer, transfer_size, DAC_ALIGN_8B_R);
+    bytes_to_transfer = transfer_size;
+}
+
+void player_dac_dma_callback()
+{
+    if (player_state == STOPPED) {
         return;
     }
 
-    if (audio_pos >= audio_len - 1) {
-        audio_state = STOPPED;
+    //swap buffers
+    uint8_t* temp = playing_buffer;
+    playing_buffer = reading_buffer;
+    reading_buffer = temp;
+
+    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_0);
+    HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_1);
+
+    playing_pos += bytes_to_transfer;
+
+    if (playing_pos >= data_len - 1) {
+        player_state = STOPPED;
         return;
     }
 
-    uint32_t bytes_left = audio_len - audio_pos;
-    uint32_t transfer_size = min(bytes_left, DMA_MAX_TRANSFER);
-    HAL_DAC_Start_DMA(hdac, DAC_CHANNEL_1, (uint32_t*)&audio_buffer[audio_pos], transfer_size, DAC_ALIGN_8B_R);
-    audio_pos += transfer_size;
+    uint32_t bytes_left = data_len - playing_pos;
+    uint32_t transfer_size = min(bytes_left, BUFFER_SIZE);
+    HAL_DAC_Start_DMA(hdac, DAC_CHANNEL_1, (uint32_t*)playing_buffer, transfer_size, DAC_ALIGN_8B_R);
+    fetch_data(reading_buffer);
 }
