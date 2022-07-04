@@ -43,7 +43,7 @@ add_definitions(-DDEBUG -DUSE_HAL_DRIVER -DSTM32H743xx)
 
 set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/STM32H743ZITX_FLASH.ld)
 
-file(GLOB_RECURSE SOURCES "Startup/*.*" "Src/*.*" "Drivers/*.*"
+file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "Startup/*.*" "Src/*.*" "Drivers/*.*"
      "Middlewares/*.*")
 
 add_link_options(
