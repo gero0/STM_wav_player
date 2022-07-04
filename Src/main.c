@@ -23,6 +23,7 @@
 #include "fatfs.h"
 #include "gpio.h"
 #include "spi.h"
+#include "stm32h7xx_hal.h"
 #include "tim.h"
 #include "usart.h"
 
@@ -32,8 +33,9 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "lcd.h"
+
 #include <audio_player.h>
-#include <sound.h>
 
 /* USER CODE END Includes */
 
@@ -59,11 +61,16 @@
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
+void PeriphCommonClock_Config(void);
 /* USER CODE BEGIN PFP */
 
-FATFS FatFs; //Fatfs handle
-FIL fil; //File handle
-FRESULT fres; //Result after operations
+#define  max_files 1024
+
+FIL current_file;
+unsigned int selected_file = 0;
+
+unsigned int file_count = 0;
+FILINFO files[max_files];
 
 void myprintf(const char* fmt, ...)
 {
@@ -73,8 +80,36 @@ void myprintf(const char* fmt, ...)
     vsnprintf(buffer, sizeof(buffer), fmt, args);
     va_end(args);
 
-    int len = strlen(buffer);
+    unsigned int len = strlen(buffer);
     HAL_UART_Transmit(&huart3, (uint8_t*)buffer, len, -1);
+}
+
+uint32_t read_file(uint8_t* buffer, uint32_t buflen)
+{
+    unsigned int bytes_read_total = 0;
+    for (int i = 0; i < buflen; i += 512) {
+        unsigned int bytes_read = 0;
+        FRESULT res = f_read(&current_file, &buffer[i], 512, &bytes_read);
+        if (bytes_read == 0) {
+            break;
+        }
+        bytes_read_total += bytes_read;
+    }
+    return bytes_read_total;
+}
+
+void display_ui()
+{
+    FILINFO file = files[selected_file];
+    char line_1[15];
+    char line_2[15];
+
+    snprintf(line_1, 15, "%s", file.fname);
+    LCD_clear();
+    LCD_position(1, 1);
+    LCD_write_text(line_1, strlen(line_1));
+    LCD_position(1, 2);
+    LCD_write_text(line_2, strlen(line_2));
 }
 
 /* USER CODE END PFP */
@@ -83,8 +118,9 @@ void myprintf(const char* fmt, ...)
 /* USER CODE BEGIN 0 */
 void HAL_DAC_ConvCpltCallbackCh1(DAC_HandleTypeDef* hdac)
 {
-    dac_dma_callback();
-    HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_1);
+    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_14);
+    player_dac_dma_callback();
+    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_14);
 }
 /* USER CODE END 0 */
 
@@ -110,6 +146,9 @@ int main(void)
     /* Configure the system clock */
     SystemClock_Config();
 
+    /* Configure the peripherals common clocks */
+    PeriphCommonClock_Config();
+
     /* USER CODE BEGIN SysInit */
 
     /* USER CODE END SysInit */
@@ -123,10 +162,18 @@ int main(void)
     MX_USART3_UART_Init();
     MX_FATFS_Init();
     /* USER CODE BEGIN 2 */
-    // HAL_DAC_Start_DMA(&hdac1, DAC_CHANNEL_1, (uint32_t*)sound, sound_len, DAC_ALIGN_8B_R);
-    // HAL_DAC_Start(&hdac1, DAC_CHANNEL_1);
+    HAL_Delay(1000);
+    LCD_init();
+    LCD_write_text("LCD TEST", 8);
+    LCD_position(1, 2);
+    LCD_write_text("LULZ", 4);
+
+    FATFS FatFs; //Fatfs handle
+    FIL fil; //File handle
+    DIR dir;
+    FRESULT fres = FR_OK; //Result after operations
+
     HAL_TIM_Base_Start(&htim6);
-    play((uint8_t*)sound, sound_len, &hdac1);
 
     HAL_Delay(5000);
 
@@ -136,47 +183,55 @@ int main(void)
         while (1) { }
     }
 
-    //Let's get some statistics from the SD card
-    DWORD free_clusters, free_sectors, total_sectors;
-
-    FATFS* getFreeFs;
-
-    fres = f_getfree("", &free_clusters, &getFreeFs);
+    fres = f_opendir(&dir, "/");
     if (fres != FR_OK) {
-        myprintf("f_getfree error (%i)\r\n", fres);
-        while (1)
-            ;
+        myprintf("Error opening directory\r\n");
+        while (1) { }
     }
 
-    //Formula comes from ChaN's documentation
-    total_sectors = (getFreeFs->n_fatent - 2) * getFreeFs->csize;
-    free_sectors = free_clusters * getFreeFs->csize;
+    file_count = 0;
+    while (file_count < max_files) {
+        FILINFO fnfo;
+        fres = f_readdir(
+            &dir,
+            &fnfo);
 
-    myprintf("SD card stats:\r\n%10lu KiB total drive space.\r\n%10lu KiB available.\r\n", total_sectors / 2, free_sectors / 2);
+        if (fres != FR_OK || fnfo.fname[0] == 0) {
+            break;
+        }
+        //filter to save only wav files
+        char* pos = strstr(fnfo.fname, ".wav");
 
-    //Now let's try to open file "test.txt"
-    fres = f_open(&fil, "test.txt", FA_READ);
+        if (pos == NULL) {
+            continue;
+        }
+
+        files[file_count] = fnfo;
+        file_count++;
+    }
+
+    myprintf("Listing files:\r\n");
+
+    for (int i = 0; i < file_count; i++) {
+        FILINFO file = files[i];
+        myprintf("%d: %s %d \r\n", i, file.fname, file.fsize);
+    }
+
+    myprintf("Opening audio file...");
+    fres = f_open(&current_file, "money.wav", FA_READ);
     if (fres != FR_OK) {
         myprintf("f_open error (%i)\r\n");
-        while (1)
-            ;
-    }
-    myprintf("I was able to open 'test.txt' for reading!\r\n");
-
-    //Read 30 bytes from "test.txt" on the SD card
-    BYTE readBuf[30];
-
-    //We can either use f_read OR f_gets to get data out of files
-    //f_gets is a wrapper on f_read that does some string formatting for us
-    TCHAR* rres = f_gets((TCHAR*)readBuf, 30, &fil);
-    if (rres != 0) {
-        myprintf("Read string from 'test.txt' contents: %s\r\n", readBuf);
-    } else {
-        myprintf("f_gets error (%i)\r\n", fres);
+        while (1) { }
     }
 
-    //Be a tidy kiwi - don't forget to close your file!
-    f_close(&fil);
+    //player_init(read_file, 13317632, &hdac1);
+    player_init(read_file, 5047688, &hdac1);
+
+    myprintf("%d %d", SD_SPI_HANDLE.Instance->CFG1);
+
+    player_play();
+
+    // f_close(&fil);
 
     /* USER CODE END 2 */
 
@@ -184,7 +239,10 @@ int main(void)
     /* USER CODE BEGIN WHILE */
     while (1) {
         /* USER CODE END WHILE */
-
+        display_ui();
+        selected_file++;
+        selected_file %= file_count;
+        HAL_Delay(2000);
         /* USER CODE BEGIN 3 */
     }
     /* USER CODE END 3 */
@@ -240,6 +298,23 @@ void SystemClock_Config(void)
     RCC_ClkInitStruct.APB4CLKDivider = RCC_APB4_DIV2;
 
     if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4) != HAL_OK) {
+        Error_Handler();
+    }
+}
+
+/**
+  * @brief Peripherals Common Clock Configuration
+  * @retval None
+  */
+void PeriphCommonClock_Config(void)
+{
+    RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = { 0 };
+
+    /** Initializes the peripherals clock
+  */
+    PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_CKPER;
+    PeriphClkInitStruct.CkperClockSelection = RCC_CLKPSOURCE_HSI;
+    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK) {
         Error_Handler();
     }
 }
