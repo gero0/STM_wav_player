@@ -64,7 +64,7 @@ void SystemClock_Config(void);
 void PeriphCommonClock_Config(void);
 /* USER CODE BEGIN PFP */
 
-#define  max_files 1024
+#define max_files 1024
 
 FIL current_file;
 unsigned int selected_file = 0;
@@ -98,6 +98,15 @@ uint32_t read_file(uint8_t* buffer, uint32_t buflen)
     return bytes_read_total;
 }
 
+void display_msg(const char* line_1, const char* line_2)
+{
+    LCD_clear();
+    LCD_position(1, 1);
+    LCD_write_text(line_1, strlen(line_1));
+    LCD_position(1, 2);
+    LCD_write_text(line_2, strlen(line_2));
+}
+
 void display_ui()
 {
     FILINFO file = files[selected_file];
@@ -105,11 +114,55 @@ void display_ui()
     char line_2[15];
 
     snprintf(line_1, 15, "%s", file.fname);
-    LCD_clear();
-    LCD_position(1, 1);
-    LCD_write_text(line_1, strlen(line_1));
-    LCD_position(1, 2);
-    LCD_write_text(line_2, strlen(line_2));
+    line_2[0] = '\0';
+    display_msg(line_1, line_2);
+}
+
+int mount_sd(FATFS* FatFs, DIR* dir)
+{
+    FRESULT fres = FR_OK; //Result after operations
+
+    fres = f_mount(FatFs, "", 1); //1=mount now
+    if (fres != FR_OK) {
+        myprintf("f_mount error (%i)\r\n", fres);
+        return 0;
+    }
+
+    fres = f_opendir(dir, "/");
+    if (fres != FR_OK) {
+        myprintf("Error opening directory\r\n");
+        return 0;
+    }
+
+    return 1;
+}
+
+uint32_t enumerate_files(DIR* dir)
+{
+    FRESULT fres = FR_OK;
+
+    file_count = 0;
+    while (file_count < max_files) {
+        FILINFO fnfo;
+        fres = f_readdir(
+            dir,
+            &fnfo);
+
+        if (fres != FR_OK || fnfo.fname[0] == 0) {
+            break;
+        }
+        //filter to save only wav files
+        char* pos = strstr(fnfo.fname, ".wav");
+
+        if (pos == NULL) {
+            continue;
+        }
+
+        files[file_count] = fnfo;
+        file_count++;
+    }
+
+    return file_count;
 }
 
 /* USER CODE END PFP */
@@ -164,71 +217,38 @@ int main(void)
     /* USER CODE BEGIN 2 */
     HAL_Delay(1000);
     LCD_init();
-    LCD_write_text("LCD TEST", 8);
-    LCD_position(1, 2);
-    LCD_write_text("LULZ", 4);
+
+    display_msg("WAV PLAYER", "loading...");
 
     FATFS FatFs; //Fatfs handle
     FIL fil; //File handle
     DIR dir;
-    FRESULT fres = FR_OK; //Result after operations
 
     HAL_TIM_Base_Start(&htim6);
-
     HAL_Delay(5000);
 
-    fres = f_mount(&FatFs, "", 1); //1=mount now
-    if (fres != FR_OK) {
-        myprintf("f_mount error (%i)\r\n", fres);
+    int res = mount_sd(&FatFs, &dir);
+    if (!res) {
+        display_msg("ERR: Could not", "mount SD CARD");
         while (1) { }
     }
 
-    fres = f_opendir(&dir, "/");
-    if (fres != FR_OK) {
-        myprintf("Error opening directory\r\n");
+    enumerate_files(&dir);
+    if (file_count == 0) {
+        display_msg("No WAV files", "found on SD");
         while (1) { }
     }
 
-    file_count = 0;
-    while (file_count < max_files) {
-        FILINFO fnfo;
-        fres = f_readdir(
-            &dir,
-            &fnfo);
-
-        if (fres != FR_OK || fnfo.fname[0] == 0) {
-            break;
-        }
-        //filter to save only wav files
-        char* pos = strstr(fnfo.fname, ".wav");
-
-        if (pos == NULL) {
-            continue;
-        }
-
-        files[file_count] = fnfo;
-        file_count++;
-    }
-
-    myprintf("Listing files:\r\n");
-
-    for (int i = 0; i < file_count; i++) {
-        FILINFO file = files[i];
-        myprintf("%d: %s %d \r\n", i, file.fname, file.fsize);
-    }
+    FRESULT fres = FR_OK;
 
     myprintf("Opening audio file...");
     fres = f_open(&current_file, "money.wav", FA_READ);
     if (fres != FR_OK) {
-        myprintf("f_open error (%i)\r\n");
+        display_msg("ERR: Could not", "open file");
         while (1) { }
     }
 
-    //player_init(read_file, 13317632, &hdac1);
     player_init(read_file, 5047688, &hdac1);
-
-    myprintf("%d %d", SD_SPI_HANDLE.Instance->CFG1);
-
     player_play();
 
     // f_close(&fil);
@@ -241,7 +261,9 @@ int main(void)
         /* USER CODE END WHILE */
         display_ui();
         selected_file++;
-        selected_file %= file_count;
+        if(selected_file >= file_count){
+            selected_file = 0;
+        }
         HAL_Delay(2000);
         /* USER CODE BEGIN 3 */
     }
