@@ -12,7 +12,6 @@ void LCD_write_nibble(uint8_t nibble, int rs)
     HAL_GPIO_WritePin(LCD_D6_GPIO_Port, LCD_D6_Pin, nibble & (1 << 2));
     HAL_GPIO_WritePin(LCD_D7_GPIO_Port, LCD_D7_Pin, nibble & (1 << 3));
 
-    HAL_Delay(1);
     HAL_GPIO_WritePin(LCD_E_GPIO_Port, LCD_E_Pin, 0);
 }
 
@@ -22,6 +21,8 @@ void LCD_write_byte(uint8_t byte)
     uint8_t high_nibble = (byte >> 4) & 0xF;
     LCD_write_nibble(high_nibble, 1);
     LCD_write_nibble(low_nibble, 1);
+
+    delay_us(200);
 }
 
 void LCD_write_command(uint8_t command)
@@ -30,6 +31,8 @@ void LCD_write_command(uint8_t command)
     uint8_t high_nibble = (command >> 4) & 0xF;
     LCD_write_nibble(high_nibble, 0);
     LCD_write_nibble(low_nibble, 0);
+
+    delay_us(800);
 }
 
 void LCD_write_text(char* text, uint32_t len)
@@ -60,18 +63,18 @@ void LCD_write_init_nibble(uint8_t nibble)
 void LCD_init()
 {
     LCD_write_init_nibble(0x20); // Wake-Up Sequence
-    HAL_Delay(5);
+    delay_us(5000);
     LCD_write_init_nibble(0x20);
-    HAL_Delay(5);
+    delay_us(5000);
     LCD_write_init_nibble(0x20);
-    HAL_Delay(5);
+    delay_us(5000);
 
     LCD_write_command(0x28); // 4-bits, 2 lines, 5x7 font
-    HAL_Delay(5);
+    delay_us(5000);
     LCD_write_command(0x0C); // Display ON, No cursors
-    HAL_Delay(5);
+    delay_us(5000);
     LCD_write_command(0x06); // Entry mode- Auto-increment, No Display shifting
-    HAL_Delay(5);
+    delay_us(5000);
     LCD_write_command(0x01);
-    HAL_Delay(5);
+    delay_us(5000);
 }

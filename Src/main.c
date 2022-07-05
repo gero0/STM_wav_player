@@ -26,7 +26,6 @@
 #include "tim.h"
 #include "usart.h"
 
-
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdarg.h>
@@ -191,6 +190,7 @@ void handle_encoder_input()
     }
 
     last_encoder_val = enc_val;
+    display_ui();
 }
 
 void stop_player()
@@ -226,6 +226,14 @@ void button_handler()
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
     button_handler();
+}
+
+void delay_us(uint16_t us)
+{
+    htim7.Instance->CNT = 0;
+    while (htim7.Instance->CNT <= us) {
+        //wait
+    }
 }
 
 /* USER CODE END PFP */
@@ -278,7 +286,13 @@ int main(void)
     MX_USART3_UART_Init();
     MX_FATFS_Init();
     MX_TIM4_Init();
+    MX_TIM7_Init();
     /* USER CODE BEGIN 2 */
+
+    HAL_TIM_Base_Start(&htim6); // DAC Timer
+    HAL_TIM_Base_Start(&htim7); // Delay Timer
+    HAL_TIM_Encoder_Start_IT(&htim4, TIM_CHANNEL_ALL);
+
     HAL_Delay(1000);
     LCD_init();
 
@@ -287,9 +301,6 @@ int main(void)
     FATFS FatFs; //Fatfs handle
     FIL fil; //File handle
     DIR dir;
-
-    HAL_TIM_Base_Start(&htim6);
-    HAL_TIM_Encoder_Start_IT(&htim4, TIM_CHANNEL_ALL);
 
     HAL_Delay(2000);
 
@@ -312,7 +323,6 @@ int main(void)
     /* Infinite loop */
     /* USER CODE BEGIN WHILE */
     while (1) {
-        display_ui();
         /* USER CODE END WHILE */
 
         /* USER CODE BEGIN 3 */
