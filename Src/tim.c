@@ -164,7 +164,7 @@ void HAL_TIM_Encoder_MspInit(TIM_HandleTypeDef* tim_encoderHandle)
     HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
     /* TIM4 interrupt Init */
-    HAL_NVIC_SetPriority(TIM4_IRQn, 0, 0);
+    HAL_NVIC_SetPriority(TIM4_IRQn, 1, 0);
     HAL_NVIC_EnableIRQ(TIM4_IRQn);
   /* USER CODE BEGIN TIM4_MspInit 1 */
 
