@@ -23,9 +23,9 @@
 #include "fatfs.h"
 #include "gpio.h"
 #include "spi.h"
-#include "stm32h7xx_hal.h"
 #include "tim.h"
 #include "usart.h"
+
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -66,11 +66,11 @@ void PeriphCommonClock_Config(void);
 
 #define max_files 1024
 
-FIL current_file;
-unsigned int selected_file = 0;
-
-unsigned int file_count = 0;
-FILINFO files[max_files];
+static volatile FIL current_file;
+static volatile FILINFO files[max_files];
+static volatile uint16_t last_encoder_val = 0;
+static volatile unsigned int selected_file = 0;
+static volatile unsigned int file_count = 0;
 
 void myprintf(const char* fmt, ...)
 {
@@ -165,6 +165,69 @@ uint32_t enumerate_files(DIR* dir)
     return file_count;
 }
 
+void enc_up()
+{
+    selected_file++;
+    if (selected_file >= file_count) {
+        selected_file = file_count - 1;
+    }
+}
+
+void enc_down()
+{
+    selected_file--;
+    if (selected_file >= file_count) {
+        selected_file = 0;
+    }
+}
+
+void handle_encoder_input()
+{
+    int enc_val = TIM4->CNT;
+    if (enc_val > last_encoder_val) {
+        enc_up();
+    } else if (enc_val < last_encoder_val) {
+        enc_down();
+    }
+
+    last_encoder_val = enc_val;
+}
+
+void stop_player()
+{
+    player_stop();
+    f_close(&current_file);
+}
+
+void start_player(FILINFO file)
+{
+    FRESULT fres = FR_OK;
+
+    myprintf("Opening audio file...");
+    fres = f_open(&current_file, file.fname, FA_READ);
+    if (fres != FR_OK) {
+        display_msg("ERR: Could not", "open file");
+        while (1) { }
+    }
+    player_init(read_file, file.fsize, &hdac1);
+    player_play();
+}
+
+void button_handler()
+{
+    if (player_get_state() != STOPPED) {
+        stop_player();
+        return;
+    }
+
+    start_player(files[selected_file]);
+}
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+    button_handler();
+}
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -214,6 +277,7 @@ int main(void)
     MX_SPI1_Init();
     MX_USART3_UART_Init();
     MX_FATFS_Init();
+    MX_TIM4_Init();
     /* USER CODE BEGIN 2 */
     HAL_Delay(1000);
     LCD_init();
@@ -225,7 +289,9 @@ int main(void)
     DIR dir;
 
     HAL_TIM_Base_Start(&htim6);
-    HAL_Delay(5000);
+    HAL_TIM_Encoder_Start_IT(&htim4, TIM_CHANNEL_ALL);
+
+    HAL_Delay(2000);
 
     int res = mount_sd(&FatFs, &dir);
     if (!res) {
@@ -239,32 +305,16 @@ int main(void)
         while (1) { }
     }
 
-    FRESULT fres = FR_OK;
-
-    myprintf("Opening audio file...");
-    fres = f_open(&current_file, "money.wav", FA_READ);
-    if (fres != FR_OK) {
-        display_msg("ERR: Could not", "open file");
-        while (1) { }
-    }
-
-    player_init(read_file, 5047688, &hdac1);
-    player_play();
-
-    // f_close(&fil);
+    display_ui();
 
     /* USER CODE END 2 */
 
     /* Infinite loop */
     /* USER CODE BEGIN WHILE */
     while (1) {
-        /* USER CODE END WHILE */
         display_ui();
-        selected_file++;
-        if(selected_file >= file_count){
-            selected_file = 0;
-        }
-        HAL_Delay(2000);
+        /* USER CODE END WHILE */
+
         /* USER CODE BEGIN 3 */
     }
     /* USER CODE END 3 */

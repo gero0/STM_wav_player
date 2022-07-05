@@ -5,21 +5,21 @@
 #define DMA_MAX_TRANSFER 65535
 #define BUFFER_SIZE 1024
 
-static uint32_t (*data_source)(uint8_t*, uint32_t) = NULL;
-static uint32_t data_len;
-static uint32_t data_pos = 0;
-static uint32_t playing_pos = 0;
-static uint32_t bytes_to_transfer = 0;
+static volatile PlayerByteSource data_source = NULL;
+static volatile uint32_t data_len = 0;
+static volatile uint32_t data_pos = 0;
+static volatile uint32_t playing_pos = 0;
+static volatile uint32_t bytes_to_transfer = 0;
 
-volatile static uint8_t buf1[BUFFER_SIZE];
-volatile static uint8_t buf2[BUFFER_SIZE];
+static volatile uint8_t buf1[BUFFER_SIZE];
+static volatile uint8_t buf2[BUFFER_SIZE];
 
-volatile static uint8_t* playing_buffer = buf1;
-volatile static uint8_t* reading_buffer = buf2;
+static volatile uint8_t* playing_buffer = buf1;
+static volatile uint8_t* reading_buffer = buf2;
 
-static enum PlayerStates player_state = STOPPED;
+static volatile enum PlayerStates player_state = STOPPED;
 
-static DAC_HandleTypeDef* hdac;
+static volatile DAC_HandleTypeDef* hdac;
 
 uint32_t min(uint32_t a, uint32_t b)
 {
@@ -36,7 +36,7 @@ uint32_t fetch_data(uint8_t* buffer)
     return bytes_read;
 }
 
-void player_init(uint32_t (*source)(uint8_t*, uint32_t), uint32_t len, DAC_HandleTypeDef* dac_handle)
+void player_init(PlayerByteSource source, uint32_t len, DAC_HandleTypeDef* dac_handle)
 {
     data_source = source;
     data_len = len;
@@ -66,6 +66,22 @@ void player_play()
     bytes_to_transfer = transfer_size;
 }
 
+void player_stop()
+{
+    if (player_state == STOPPED) {
+        return; //TODO: return some kind of error
+    }
+
+    HAL_DAC_Stop_DMA(hdac, DAC_CHANNEL_1);
+    player_state = STOPPED;
+}
+
+enum PlayerStates player_get_state()
+{
+    return player_state;
+}
+
+//TODO: player stopped callback
 void player_dac_dma_callback()
 {
     if (player_state == STOPPED) {
