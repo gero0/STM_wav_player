@@ -5,7 +5,9 @@
 #define DMA_MAX_TRANSFER 65535
 #define BUFFER_SIZE 1024
 
-static volatile PlayerByteSource data_source = NULL;
+static PlayerByteSource data_source = NULL;
+static void (*playback_finished_callback)() = NULL;
+
 static volatile uint32_t data_len = 0;
 static volatile uint32_t data_pos = 0;
 static volatile uint32_t playing_pos = 0;
@@ -81,6 +83,15 @@ enum PlayerStates player_get_state()
     return player_state;
 }
 
+void player_register_stop_callback(void (*callback)())
+{
+    playback_finished_callback = callback;
+}
+
+void player_unregister_stop_callback(){
+    playback_finished_callback = NULL;
+}
+
 //TODO: player stopped callback
 void player_dac_dma_callback()
 {
@@ -100,6 +111,9 @@ void player_dac_dma_callback()
 
     if (playing_pos >= data_len - 1) {
         player_state = STOPPED;
+        if (playback_finished_callback != NULL) {
+            playback_finished_callback();
+        }
         return;
     }
 

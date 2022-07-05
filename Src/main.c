@@ -195,6 +195,7 @@ void handle_encoder_input()
 
 void stop_player()
 {
+    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_14);
     player_stop();
     f_close(&current_file);
 }
@@ -242,9 +243,7 @@ void delay_us(uint16_t us)
 /* USER CODE BEGIN 0 */
 void HAL_DAC_ConvCpltCallbackCh1(DAC_HandleTypeDef* hdac)
 {
-    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_14);
     player_dac_dma_callback();
-    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_14);
 }
 /* USER CODE END 0 */
 
@@ -292,6 +291,8 @@ int main(void)
     HAL_TIM_Base_Start(&htim6); // DAC Timer
     HAL_TIM_Base_Start(&htim7); // Delay Timer
     HAL_TIM_Encoder_Start_IT(&htim4, TIM_CHANNEL_ALL);
+
+    player_register_stop_callback(stop_player);
 
     HAL_Delay(1000);
     LCD_init();
