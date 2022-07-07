@@ -31,9 +31,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
-
-#include "lcd.h"
-
+#include <lcd.h>
 #include <audio_player.h>
 
 /* USER CODE END Includes */
@@ -55,6 +53,12 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+#define max_files 1024
+
+static volatile FILINFO files[max_files];
+static volatile uint16_t last_encoder_val = 0;
+static volatile unsigned int selected_file = 0;
+static volatile unsigned int file_count = 0;
 
 /* USER CODE END PV */
 
@@ -63,12 +67,10 @@ void SystemClock_Config(void);
 void PeriphCommonClock_Config(void);
 /* USER CODE BEGIN PFP */
 
-#define max_files 1024
+/* USER CODE END PFP */
 
-static volatile FILINFO files[max_files];
-static volatile uint16_t last_encoder_val = 0;
-static volatile unsigned int selected_file = 0;
-static volatile unsigned int file_count = 0;
+/* Private user code ---------------------------------------------------------*/
+/* USER CODE BEGIN 0 */
 
 void myprintf(const char* fmt, ...)
 {
@@ -214,14 +216,11 @@ void delay_us(uint16_t us)
     }
 }
 
-/* USER CODE END PFP */
-
-/* Private user code ---------------------------------------------------------*/
-/* USER CODE BEGIN 0 */
 void HAL_DAC_ConvCpltCallbackCh1(DAC_HandleTypeDef* hdac)
 {
     player_dac_dma_callback();
 }
+
 /* USER CODE END 0 */
 
 /**
