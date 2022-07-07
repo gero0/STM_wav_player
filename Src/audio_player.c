@@ -1,9 +1,10 @@
 #include "audio_player.h"
 #include "stm32h7xx_hal_dac.h"
+#include "stm32h7xx_hal_dac_ex.h"
 #include <stdint.h>
 
 #define DMA_MAX_TRANSFER 65535
-#define BUFFER_SIZE 1024
+#define BUFFER_SIZE 2048
 
 static PlayerByteSource data_source = NULL;
 static void (*playback_finished_callback)() = NULL;
@@ -64,7 +65,8 @@ void player_play()
 
     uint32_t transfer_size = min(data_pos, BUFFER_SIZE);
 
-    HAL_DAC_Start_DMA(hdac, DAC_CHANNEL_1, (uint32_t*)playing_buffer, transfer_size, DAC_ALIGN_8B_R);
+    //HAL_DAC_Start_DMA(hdac, DAC_CHANNEL_1, (uint32_t*)playing_buffer, transfer_size, DAC_ALIGN_8B_R);
+    HAL_DACEx_DualStart_DMA(hdac, DAC_CHANNEL_1, (uint32_t*)playing_buffer, transfer_size / 2, DAC_ALIGN_8B_R);
     bytes_to_transfer = transfer_size;
 }
 
@@ -88,7 +90,8 @@ void player_register_stop_callback(void (*callback)())
     playback_finished_callback = callback;
 }
 
-void player_unregister_stop_callback(){
+void player_unregister_stop_callback()
+{
     playback_finished_callback = NULL;
 }
 
@@ -119,6 +122,8 @@ void player_dac_dma_callback()
 
     uint32_t bytes_left = data_len - playing_pos;
     uint32_t transfer_size = min(bytes_left, BUFFER_SIZE);
-    HAL_DAC_Start_DMA(hdac, DAC_CHANNEL_1, (uint32_t*)playing_buffer, transfer_size, DAC_ALIGN_8B_R);
+    //HAL_DAC_Start_DMA(hdac, DAC_CHANNEL_1, (uint32_t*)playing_buffer, transfer_size, DAC_ALIGN_8B_R);
+    HAL_DACEx_DualStart_DMA(hdac, DAC_CHANNEL_1, (uint32_t*)playing_buffer, transfer_size / 2, DAC_ALIGN_8B_R);
     fetch_data(reading_buffer);
+    bytes_to_transfer = transfer_size;
 }

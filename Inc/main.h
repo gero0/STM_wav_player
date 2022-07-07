@@ -72,8 +72,8 @@ void delay_us(uint16_t us);
 #define LCD_RW_GPIO_Port GPIOF
 #define LCD_RS_Pin GPIO_PIN_1
 #define LCD_RS_GPIO_Port GPIOG
-#define SD_CS_Pin GPIO_PIN_6
-#define SD_CS_GPIO_Port GPIOC
+#define SD_CS_Pin GPIO_PIN_15
+#define SD_CS_GPIO_Port GPIOA
 /* USER CODE BEGIN Private defines */
 #define SD_SPI_HANDLE hspi1
 
