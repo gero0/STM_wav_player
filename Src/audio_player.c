@@ -39,26 +39,30 @@ uint32_t min(uint32_t a, uint32_t b)
     return b;
 }
 
-uint32_t load_bytes_stereo(uint8_t* buffer, uint32_t buflen)
+int load_bytes_stereo(uint8_t* buffer, uint32_t buflen)
 {
     unsigned int bytes_read_total = 0;
 
     //I don't know if it's just my SD card, but it REALLY does not want to allow
     //single read ops longer than 512 bytes
     for (int i = 0; i < buflen; i += 512) {
-        unsigned int bytes_read = 0;
-        FRESULT res = f_read(&current_file, &buffer[i], 512, &bytes_read);
-        if (bytes_read == 0) {
+        unsigned int bytes_r = 0;
+        FRESULT res = f_read(&current_file, &buffer[i], 512, &bytes_r);
+        if (res != FR_OK) {
+            return res;
+        }
+        if (bytes_r == 0) {
             break;
         }
-        bytes_read_total += bytes_read;
+        bytes_read_total += bytes_r;
     }
 
     data_pos += bytes_read_total;
-    return bytes_read_total;
+
+    return FR_OK;
 }
 
-uint32_t load_bytes_mono(uint8_t* buffer, uint32_t buflen)
+int load_bytes_mono(uint8_t* buffer, uint32_t buflen)
 {
     uint8_t temp_buf[buflen / 2];
     unsigned int bytes_read_total = 0;
@@ -66,12 +70,15 @@ uint32_t load_bytes_mono(uint8_t* buffer, uint32_t buflen)
     //I don't know if it's just my SD card, but it REALLY does not want to allow
     //single read ops longer than 512 bytes
     for (int i = 0; i < buflen / 2; i += 512) {
-        unsigned int bytes_read = 0;
-        FRESULT res = f_read(&current_file, &temp_buf[i], 512, &bytes_read);
-        if (bytes_read == 0) {
+        unsigned int bytes_r = 0;
+        FRESULT res = f_read(&current_file, &temp_buf[i], 512, &bytes_r);
+        if (res != FR_OK) {
+            return res;
+        }
+        if (bytes_r == 0) {
             break;
         }
-        bytes_read_total += bytes_read;
+        bytes_read_total += bytes_r;
     }
 
     //duplicate the sample, so identical samples play in left and right channels
@@ -81,10 +88,11 @@ uint32_t load_bytes_mono(uint8_t* buffer, uint32_t buflen)
     }
 
     data_pos += bytes_read_total;
-    return bytes_read_total;
+
+    return FR_OK;
 }
 
-uint32_t load_bytes(uint8_t* buffer, uint32_t buflen)
+int load_bytes(uint8_t* buffer, uint32_t buflen)
 {
     if (n_channels == 2) {
         return load_bytes_stereo(buffer, buflen);
@@ -195,9 +203,17 @@ int player_loadfile(FILINFO fileinfo)
 
     htim->Instance->ARR = ((timer_freq / wav_data.sample_rate) - 1);
 
+    uint32_t bytes_read;
+
     //The order here is important!
-    load_bytes(playing_buffer, BUFFER_SIZE);
-    load_bytes(reading_buffer, BUFFER_SIZE);
+    fres = load_bytes(playing_buffer, BUFFER_SIZE);
+    if(fres != FR_OK){
+        return PLAYER_FS_ERROR;
+    }
+    fres = load_bytes(reading_buffer, BUFFER_SIZE);
+    if(fres != FR_OK){
+        return PLAYER_FS_ERROR;
+    }
 
     player_state = PSTATUS_READY;
 
@@ -261,9 +277,9 @@ void player_dac_dma_callback()
     HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_0);
     HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_1);
 
-    if(n_channels == 1){
+    if (n_channels == 1) {
         playing_pos += bytes_to_transfer / 2;
-    }else{
+    } else {
         playing_pos += bytes_to_transfer;
     }
 
@@ -279,6 +295,11 @@ void player_dac_dma_callback()
     uint32_t transfer_size = min(bytes_left, BUFFER_SIZE);
 
     HAL_DACEx_DualStart_DMA(hdac, DAC_CHANNEL_1, (uint32_t*)playing_buffer, transfer_size / 2, DAC_ALIGN_8B_R);
-    load_bytes(reading_buffer, BUFFER_SIZE);
+
+    FRESULT fres = load_bytes(reading_buffer, BUFFER_SIZE);
+    if(fres != FR_OK){
+        player_stop();
+        //TODO: Add an error callback?
+    }
     bytes_to_transfer = transfer_size;
 }
