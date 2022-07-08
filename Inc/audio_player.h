@@ -3,12 +3,23 @@
 #include <stdint.h>
 
 enum PlayerStates {
-    PLAYING,
-    STOPPED,
-    READY,
+    PSTATUS_PLAYING,
+    PSTATUS_STOPPED,
+    PSTATUS_READY,
 };
 
-void player_init(DAC_HandleTypeDef* dac_handle, TIM_HandleTypeDef* timer_handle);
+enum PlayerLoadResult {
+    PLAYER_OK = 1,
+    PLAYER_UNSUPP_CHNL = 0,
+    PLAYER_ERR_GENERIC = -1,
+    PLAYER_UNSUPP_FMT = -2,
+    PLAYER_UNSUPP_SMPLRATE = -3,
+    PLAYER_UNSUPP_BITRATE = -4,
+    PLAYER_PARSE_ERR = -5,
+    PLAYER_FS_ERROR = -6,
+};
+
+void player_init(DAC_HandleTypeDef* dac_handle, TIM_HandleTypeDef* timer_handle, uint32_t timer_frequency);
 int player_loadfile(FILINFO fileinfo);
 void player_play();
 void player_stop();

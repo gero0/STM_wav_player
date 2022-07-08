@@ -195,7 +195,7 @@ void start_player(FILINFO file)
 
 void button_handler()
 {
-    if (player_get_state() != STOPPED) {
+    if (player_get_state() != PSTATUS_STOPPED) {
         player_stop();
         return;
     }
@@ -272,7 +272,7 @@ int main(void)
 
     display_msg("WAV PLAYER", "loading...");
 
-    player_init(&hdac1, &htim6);
+    player_init(&hdac1, &htim6, 240000000);
 
     FATFS FatFs; //Fatfs handle
     FIL fil; //File handle
