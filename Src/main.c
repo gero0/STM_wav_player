@@ -186,9 +186,13 @@ void start_player(FILINFO file)
 
     myprintf("Opening audio file...");
     int result = player_loadfile(file);
-    if (result != 1) {
-        display_msg("ERR: Could not", "open file");
-        while (1) { }
+    if (result != PLAYER_OK) {
+        if(result == PLAYER_FS_ERROR){
+            display_msg("FS ERR RESTART", "DEVICE");
+            Error_Handler();
+        }
+        display_msg("ERR OPEN.FILE", "UNSUPP FMT");
+        return;
     }
     player_play();
 }
@@ -205,7 +209,9 @@ void button_handler()
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
+  if(GPIO_Pin == GPIO_PIN_13){
     button_handler();
+  }
 }
 
 void delay_us(uint16_t us)
@@ -267,29 +273,30 @@ int main(void)
     HAL_TIM_Base_Start(&htim7); // Delay Timer
     HAL_TIM_Encoder_Start_IT(&htim4, TIM_CHANNEL_ALL);
 
-    HAL_Delay(1000);
     LCD_init();
 
     display_msg("WAV PLAYER", "loading...");
 
+    //DAC timer is clocked at 240MHz
     player_init(&hdac1, &htim6, 240000000);
 
     FATFS FatFs; //Fatfs handle
     FIL fil; //File handle
     DIR dir;
 
+    //Give SD card some time to settle
     HAL_Delay(2000);
 
     int res = mount_sd(&FatFs, &dir);
     if (!res) {
-        display_msg("ERR: Could not", "mount SD CARD");
-        while (1) { }
+        display_msg("SD ERROR", "RESTART DEVICE");
+        Error_Handler();
     }
 
     enumerate_files(&dir);
     if (file_count == 0) {
         display_msg("No WAV files", "found on SD");
-        while (1) { }
+        Error_Handler();
     }
 
     display_ui();
