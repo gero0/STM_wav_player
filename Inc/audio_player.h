@@ -24,6 +24,7 @@ int player_loadfile(FILINFO fileinfo);
 void player_play();
 void player_stop();
 enum PlayerStates player_get_state();
+double player_get_progress();
 void player_register_stop_callback(void (*callback)());
 void player_unregister_stop_callback();
 void player_dac_dma_callback();

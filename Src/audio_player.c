@@ -39,6 +39,14 @@ uint32_t min(uint32_t a, uint32_t b)
     return b;
 }
 
+double player_get_progress(){
+    if(player_state != PSTATUS_PLAYING){
+        return 0.0;
+    }
+
+    return (double) (playing_pos) / data_len;
+}
+
 int load_bytes_stereo(uint8_t* buffer, uint32_t buflen)
 {
     unsigned int bytes_read_total = 0;
@@ -231,6 +239,8 @@ void player_play()
     HAL_DACEx_DualStart_DMA(hdac, DAC_CHANNEL_1, (uint32_t*)playing_buffer, transfer_size / 2, DAC_ALIGN_8B_R);
     HAL_TIM_Base_Start(htim); // DAC Timer
     bytes_to_transfer = transfer_size;
+
+    player_state = PSTATUS_PLAYING;
 }
 
 void player_stop()
