@@ -57,10 +57,10 @@
 /* USER CODE BEGIN PV */
 #define max_files 1024
 
-static volatile FILINFO files[max_files];
-static volatile uint16_t last_encoder_val = 0;
-static volatile unsigned int selected_file = 0;
-static volatile unsigned int file_count = 0;
+static FILINFO files[max_files];
+static uint16_t last_encoder_val = 0;
+static unsigned int selected_file = 0;
+static unsigned int file_count = 0;
 
 /* USER CODE END PV */
 
@@ -290,7 +290,7 @@ int main(void)
     HAL_TIM_Base_Start(&htim7); // Delay Timer
     HAL_TIM_Encoder_Start_IT(&htim4, TIM_CHANNEL_ALL);
 
-    LCD_init();
+    LCD_init(delay_us);
 
     display_msg("WAV PLAYER", "loading...");
 

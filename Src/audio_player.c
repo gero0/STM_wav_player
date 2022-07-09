@@ -11,24 +11,24 @@
 
 static void (*playback_finished_callback)() = NULL;
 
-static volatile uint32_t data_len = 0;
-static volatile uint32_t data_pos = 0;
-static volatile uint32_t playing_pos = 0;
-static volatile uint32_t bytes_to_transfer = 0;
-static volatile uint16_t n_channels = 2;
+static uint32_t data_len = 0;
+static uint32_t data_pos = 0;
+static uint32_t playing_pos = 0;
+static uint32_t bytes_to_transfer = 0;
+static uint16_t n_channels = 2;
 
-static volatile uint8_t buf1[BUFFER_SIZE];
-static volatile uint8_t buf2[BUFFER_SIZE];
+static uint8_t buf1[BUFFER_SIZE];
+static uint8_t buf2[BUFFER_SIZE];
 
-static volatile uint8_t* playing_buffer = buf1;
-static volatile uint8_t* reading_buffer = buf2;
+static uint8_t* playing_buffer = buf1;
+static uint8_t* reading_buffer = buf2;
 
-static volatile enum PlayerStates player_state = PSTATUS_STOPPED;
+static enum PlayerStates player_state = PSTATUS_STOPPED;
 
-static volatile DAC_HandleTypeDef* hdac;
-static volatile TIM_HandleTypeDef* htim;
+static DAC_HandleTypeDef* hdac;
+static TIM_HandleTypeDef* htim;
 
-static volatile FIL current_file;
+static FIL current_file;
 static uint32_t timer_freq = 0;
 
 uint32_t min(uint32_t a, uint32_t b)
@@ -39,12 +39,13 @@ uint32_t min(uint32_t a, uint32_t b)
     return b;
 }
 
-double player_get_progress(){
-    if(player_state != PSTATUS_PLAYING){
+double player_get_progress()
+{
+    if (player_state != PSTATUS_PLAYING) {
         return 0.0;
     }
 
-    return (double) (playing_pos) / data_len;
+    return (double)(playing_pos) / data_len;
 }
 
 int load_bytes_stereo(uint8_t* buffer, uint32_t buflen)
@@ -215,11 +216,11 @@ int player_loadfile(FILINFO fileinfo)
 
     //The order here is important!
     fres = load_bytes(playing_buffer, BUFFER_SIZE);
-    if(fres != FR_OK){
+    if (fres != FR_OK) {
         return PLAYER_FS_ERROR;
     }
     fres = load_bytes(reading_buffer, BUFFER_SIZE);
-    if(fres != FR_OK){
+    if (fres != FR_OK) {
         return PLAYER_FS_ERROR;
     }
 
@@ -307,7 +308,7 @@ void player_dac_dma_callback()
     HAL_DACEx_DualStart_DMA(hdac, DAC_CHANNEL_1, (uint32_t*)playing_buffer, transfer_size / 2, DAC_ALIGN_8B_R);
 
     FRESULT fres = load_bytes(reading_buffer, BUFFER_SIZE);
-    if(fres != FR_OK){
+    if (fres != FR_OK) {
         player_stop();
         //TODO: Add an error callback?
     }

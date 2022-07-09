@@ -16,19 +16,19 @@ uint16_t get_uint16(const uint8_t* buf)
 int parse_wav_header(const uint8_t* buffer, WavData* data)
 {
     int r = strncmp((const char*)buffer, "RIFF", 4);
-    if(r != 0){
+    if (r != 0) {
         return -1;
     }
 
     r = strncmp((const char*)&buffer[8], "WAVE", 4);
-    if(r != 0){
+    if (r != 0) {
         return -1;
     }
 
     uint32_t file_size = get_uint32(&buffer[4]);
 
     r = strncmp((const char*)&buffer[12], "fmt", 3);
-    if(r != 0){
+    if (r != 0) {
         return -1;
     }
 

@@ -1,6 +1,7 @@
 #include "lcd.h"
-#include <main.h>
 #include <stm32h7xx_hal.h>
+
+static Delay_f delay_us = NULL;
 
 void LCD_write_nibble(uint8_t nibble, int rs)
 {
@@ -35,7 +36,7 @@ void LCD_write_command(uint8_t command)
     delay_us(800);
 }
 
-void LCD_write_text(char* text, uint32_t len)
+void LCD_write_text(const char* text, uint32_t len)
 {
     for (int i = 0; i < len; i++) {
         LCD_write_byte(text[i]);
@@ -60,8 +61,10 @@ void LCD_write_init_nibble(uint8_t nibble)
     LCD_write_nibble((nibble >> 4) & 0x0f, 0);
 }
 
-void LCD_init()
+void LCD_init(Delay_f delay_function)
 {
+    delay_us = delay_function;
+
     LCD_write_init_nibble(0x20); // Wake-Up Sequence
     delay_us(5000);
     LCD_write_init_nibble(0x20);
